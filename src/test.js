@@ -1,0 +1,19 @@
+const fs = require('fs');
+const { DefaultInjector, DynamicTest } = require('./detectors');
+const parser = require('./parser');
+
+(async () => {
+    const sourceCode = fs.readFileSync('../contracts/1.sol', 'utf8');
+    const constructorArguments = "00000000000000000000000000000000000000000000000000000000000000c000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000012000000000000000000000000000000000000314dc6448d9338c15b0a000000000000000000000000000000006603cb70464ca51481d4edbb3b927f66f53f4f42000000000000000000000000b8f226ddb7bc672e27dffb67e4adabfa8c0dfa080000000000000000000000000000000000000000000000000000000000000009534849424120494e55000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000045348494200000000000000000000000000000000000000000000000000000000";
+    const injectedSourceCode = DefaultInjector(sourceCode);
+    const fuzzing = new DynamicTest(injectedSourceCode, constructorArguments)
+    console.log(fuzzing.insert())
+    // save to file
+    fs.writeFileSync('../contracts/1_fuzz.sol', fuzzing.insert(), 'utf8');
+
+    // if (!contractInfo.isTokenContract) return;
+    //
+    // for (const detector of detectors) {
+    //     await detector(null, null, contractInfo);
+    // }
+})()
