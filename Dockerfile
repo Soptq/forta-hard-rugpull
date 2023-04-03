@@ -23,7 +23,7 @@ WORKDIR /app
 RUN git init && \
     git config --global user.email "docker@docker.com" && \
     git config --global user.name "Docker" && \
-    forge install foundry-rs/forge-std \
+    forge install foundry-rs/forge-std
 COPY ./src ./src
 COPY package*.json .env foundry.toml ./
 RUN mkdir test && \
