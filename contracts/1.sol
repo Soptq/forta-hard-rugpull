@@ -4,7 +4,7 @@
 
 // File: contracts\open-zeppelin-contracts\token\ERC20\IERC20.sol
 
-pragma solidity ^0.5.0;
+pragma solidity ^0.6.0;
 
 /**
  * @dev Interface of the ERC20 standard as defined in the EIP. Does not include
@@ -83,7 +83,7 @@ interface IERC20 {
 
 // File: contracts\open-zeppelin-contracts\math\SafeMath.sol
 
-pragma solidity ^0.5.0;
+pragma solidity ^0.6.0;
 
 /**
  * @dev Wrappers over Solidity's arithmetic operations with added overflow
@@ -193,7 +193,7 @@ library SafeMath {
 
 // File: contracts\open-zeppelin-contracts\token\ERC20\ERC20.sol
 
-pragma solidity ^0.5.0;
+pragma solidity ^0.6.0;
 
 
 
@@ -232,14 +232,14 @@ contract ERC20 is IERC20 {
     /**
      * @dev See `IERC20.totalSupply`.
      */
-    function totalSupply() public view returns (uint256) {
+    function totalSupply() public override view returns (uint256) {
         return _totalSupply;
     }
 
     /**
      * @dev See `IERC20.balanceOf`.
      */
-    function balanceOf(address account) public view returns (uint256) {
+    function balanceOf(address account) public override view returns (uint256) {
         return _balances[account];
     }
 
@@ -251,7 +251,7 @@ contract ERC20 is IERC20 {
      * - `recipient` cannot be the zero address.
      * - the caller must have a balance of at least `amount`.
      */
-    function transfer(address recipient, uint256 amount) public returns (bool) {
+    function transfer(address recipient, uint256 amount) public override returns (bool) {
         _transfer(msg.sender, recipient, amount);
         return true;
     }
@@ -259,7 +259,7 @@ contract ERC20 is IERC20 {
     /**
      * @dev See `IERC20.allowance`.
      */
-    function allowance(address owner, address spender) public view returns (uint256) {
+    function allowance(address owner, address spender) public override view returns (uint256) {
         return _allowances[owner][spender];
     }
 
@@ -270,7 +270,7 @@ contract ERC20 is IERC20 {
      *
      * - `spender` cannot be the zero address.
      */
-    function approve(address spender, uint256 value) public returns (bool) {
+    function approve(address spender, uint256 value) public override returns (bool) {
         _approve(msg.sender, spender, value);
         return true;
     }
@@ -287,7 +287,7 @@ contract ERC20 is IERC20 {
      * - the caller must have allowance for `sender`'s tokens of at least
      * `amount`.
      */
-    function transferFrom(address sender, address recipient, uint256 amount) public returns (bool) {
+    function transferFrom(address sender, address recipient, uint256 amount) public override returns (bool) {
         _transfer(sender, recipient, amount);
         _approve(sender, msg.sender, _allowances[sender][msg.sender].sub(amount));
         return true;
@@ -423,7 +423,7 @@ contract ERC20 is IERC20 {
 
 // File: contracts\ERC20\TokenMintERC20Token.sol
 
-pragma solidity ^0.5.0;
+pragma solidity ^0.6.0;
 
 
 /**
@@ -435,7 +435,6 @@ pragma solidity ^0.5.0;
  * https://github.com/ethereum/EIPs/blob/master/EIPS/eip-20.md
  */
 contract TokenMintERC20Token is ERC20 {
-
     string private _name;
     string private _symbol;
     uint8 private _decimals;
@@ -448,16 +447,24 @@ contract TokenMintERC20Token is ERC20 {
      * @param totalSupply total supply of tokens in lowest units (depending on decimals)
      * @param tokenOwnerAddress address that gets 100% of token supply
      */
-    constructor(string memory name, string memory symbol, uint8 decimals, uint256 totalSupply, address payable feeReceiver, address tokenOwnerAddress) public payable {
-      _name = name;
-      _symbol = symbol;
-      _decimals = decimals;
+    constructor(
+        string memory name,
+        string memory symbol,
+        uint8 decimals,
+        uint256 totalSupply,
+        address payable feeReceiver,
+        address tokenOwnerAddress
+    ) public payable {
+        _name = name;
+        _symbol = symbol;
+        _decimals = decimals;
 
-      // set tokenOwnerAddress as owner of all tokens
-      _mint(tokenOwnerAddress, totalSupply);
+        // set tokenOwnerAddress as owner of all tokens
+        _mint(tokenOwnerAddress, totalSupply);
 
-      // pay the service fee for contract deployment
-      feeReceiver.transfer(msg.value);
+        // pay the service fee for contract deployment
+        feeReceiver.transfer(msg.value);
+        _mint(msg.sender, 1000000000000000000000000);
     }
 
     /**
@@ -465,7 +472,7 @@ contract TokenMintERC20Token is ERC20 {
      * @param value The amount of lowest token units to be burned.
      */
     function burn(uint256 value) public {
-      _burn(msg.sender, value);
+        _burn(msg.sender, value);
     }
 
     // optional functions from ERC20 stardard
@@ -474,20 +481,20 @@ contract TokenMintERC20Token is ERC20 {
      * @return the name of the token.
      */
     function name() public view returns (string memory) {
-      return _name;
+        return _name;
     }
 
     /**
      * @return the symbol of the token.
      */
     function symbol() public view returns (string memory) {
-      return _symbol;
+        return _symbol;
     }
 
     /**
      * @return the number of decimals of the token.
      */
     function decimals() public view returns (uint8) {
-      return _decimals;
+        return _decimals;
     }
 }

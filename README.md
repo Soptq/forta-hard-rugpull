@@ -1,26 +1,49 @@
-# Large Tether Transfer Agent
+# Hard Regpull Detection Agent
 
 ## Description
 
-This agent detects transactions with large Tether transfers
+This agent trys to detect different kinds of hard rug pulls:
+1. Honeypot: token holders are unable to transfer their tokens.
+2. Hidden mints: tokens can be minted using hidden functions.
+3. Fake ownership renounciation: renounced owners can somehow recover its ownership.
+4. Hidden fee modifier: transfer fee can be modified using hidden functions.
+5. Hidden transfer: token holders's tokens can be transferred by others.
+6. Hidden transfer reverts: changeable parameters that can cause transfer to revert.
+
+Current, this agent uses [invariant testing](https://book.getfoundry.sh/forge/invariant-testing) to detect the above mentioned rug pulls. Invariant testing is a technique that uses a set of invariants to test the correctness of a smart contract. For example, to detect `HiddenMints`, we can use the following invariant:
+
+```solidity
+assert(totalSupply() == initialSupply)
+```
 
 ## Supported Chains
 
-- Ethereum
-- List any other chains this agent can support e.g. BSC
+All chains that Forta supports.
 
 ## Alerts
 
-Describe each of the type of alerts fired by this agent
+When one of the above mentioned rug pull is detected:
 
-- FORTA-1
-  - Fired when a transaction contains a Tether transfer over 10,000 USDT
-  - Severity is always set to "low" (mention any conditions where it could be something else)
-  - Type is always set to "info" (mention any conditions where it could be something else)
-  - Mention any other type of metadata fields included with this alert
+- HARD-RUG-PULL-{RUGPULL_CATEGORY}-DYNAMIC
+  - Fired when a created token contract is detected to be suspicious.
+  - Severity is always set to "medium"
+  - Type is always set to "suspicious"
+  - Metadata:
+    - attacker_deployer_address: the address of the attacker's deployer contract
+    - token_contract_address: the address of the token contract
 
-## Test Data
+When two or more of the above mentioned rug pull is detected, the agent will additionally fire the following alert:
 
-The agent behaviour can be verified with the following transactions:
+- HARD-RUG-PULL-1
+  - Fired when a created token contract is detected to be suspicious.
+  - Severity is always set to "high"
+  - Type is always set to "suspicious"
+  - Metadata:
+    - attacker_deployer_address: the address of the attacker's deployer contract
+    - token_contract_address: the address of the token contract
 
-- 0x3a0f757030beec55c22cbc545dd8a844cbbb2e6019461769e1bc3f3a95d10826 (15,000 USDT)
+## Test
+
+```shell
+npm run tx 0xa6fa9abc4dcf094749997e57beb20b2287614bd9da34bcab1ffd912ccdd1775e
+```

@@ -3,3 +3,6 @@ dist
 forta.config.json
 .env
 .idea
+test/*.sol
+out
+cache

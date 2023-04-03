@@ -5,19 +5,20 @@ const {
     FindingType,
     getEthersProvider,
     getTransactionReceipt,
-    TransactionEvent,
-    Network, ethers,
+    Label,
+    Network,
+    EntityType,
 } = require("forta-agent");
+const fs = require('fs');
+const getDirName = require('path').dirname;
 const fetch = require('node-fetch');
-const parser = require('./parser');
-const { DynamicHoneypotDetector } = require('./detectors');
+const { DynamicTest, DefaultInjector } = require('./detectors');
 const HttpsProxyAgent = require('https-proxy-agent');
+const shell = require('shelljs');
+const {exit} = require("shelljs");
 
 const ETHERSCAN_API_KEY = process.env.ETHERSCAN_API_KEY;
 const proxy = process.env.http_proxy
-const detectors = [
-    DynamicHoneypotDetector
-]
 
 let findingsCount = 0;
 
@@ -43,12 +44,18 @@ const getSourceCode = async (txEvent, contractAddress) => {
         throw new Error('Network not supported');
     }
 
-    const response = await fetch(apiEndpoint, {agent: new HttpsProxyAgent(proxy)});
+    let response;
+    if (proxy) {
+        response = await fetch(apiEndpoint, {agent: new HttpsProxyAgent(proxy)});
+    } else {
+        response = await fetch(apiEndpoint);
+    }
     const data = await response.json();
     return data.result[0].SourceCode;
 }
 
 const handleTransaction = async (txEvent) => {
+    console.log(`Handling transaction ${txEvent.transaction.hash}...`)
     const findings = [];
 
     // limiting this agent to emit only 5 findings so that the alert feed is not spammed
@@ -57,8 +64,31 @@ const handleTransaction = async (txEvent) => {
     const createdContract = await getCreatedContractAddress(txEvent);
     if (!createdContract) return findings;
 
-    const sourceCode = await getSourceCode(txEvent, createdContract);
+    let sourceCode = await getSourceCode(txEvent, createdContract);
     if (!sourceCode) return findings;
+
+    if (sourceCode.startsWith("{")) {
+        // multiple contracts in the same file
+        const contractsJson = JSON.parse(sourceCode.slice(1, -1));
+        for (const [contractName, contractSourceCode] of Object.entries(contractsJson.sources)) {
+            // write files locally
+            fs.mkdirSync(getDirName(`./working/${contractName}`), { recursive: true });
+            fs.writeFileSync(`./working/${contractName}`, contractSourceCode.content)
+        }
+
+        // forge flatten
+        let longestFlattenedContractLength = 0;
+        for (const contractName of Object.keys(contractsJson.sources)) {
+            const contractCode = shell.exec(`forge flatten --root ./working ./working/${contractName}`, {silent: true});
+            if (contractCode.length > longestFlattenedContractLength) {
+                sourceCode = contractCode;
+                longestFlattenedContractLength = contractCode.length;
+            }
+        }
+
+        // remove files under working
+        fs.rmdirSync('./working', { recursive: true });
+    }
 
     const deploymentData = txEvent.transaction.data;
     const code = await getEthersProvider().getCode(createdContract);
@@ -66,22 +96,80 @@ const handleTransaction = async (txEvent) => {
     if (loc < 0) return findings;
 
     const constructArguments = deploymentData.slice(loc + 32)
-    console.log(constructArguments)
-
-    let contractInfo;
+    let testing;
     try {
-        contractInfo = parser.parseContract(sourceCode)
-    } catch (e) {
-        console.error(e.errors)
+        const injectedSourceCode = DefaultInjector(sourceCode);
+        testing = new DynamicTest(injectedSourceCode, constructArguments);
+    } catch (error) {
+        console.log(error)
         return findings;
     }
-    console.log(contractInfo.entryContract.loc.start)
-    if (!contractInfo.isTokenContract) return findings;
+    const results = await testing.test(txEvent);
 
-    for (const detector of detectors) {
-        const findingsFromDetector = await detector(txEvent, createdContract, contractInfo.ast);
-        findings.push(...findingsFromDetector);
+    for (const [key, value] of Object.entries(results)) {
+        if (!key.startsWith("test/test.sol")) continue;
+        const testName = key.split(":")[1];
+        const result = value["test_results"];
+        let success = true
+        for (const [_, testResult] of Object.entries(result)) {
+            success = success && testResult["success"]
+        }
+
+        if (!success) {
+            findings.push(Finding.fromObject({
+                name: `HARD-RUG-PULL-${testName.slice(7, -4).toUpperCase()}-DYNAMIC`,
+                alertId: `HARD-RUG-PULL-${testName.slice(7, -4).toUpperCase()}-DYNAMIC`,
+                description: `${txEvent.transaction.from} deployed a token contract ${createdContract} that may result in a hard rug pull`,
+                severity: FindingSeverity.Medium,
+                type: FindingType.Suspicious,
+                metadata: {
+                    "attacker_deployer_address": txEvent.transaction.from,
+                    "token_contract_address": createdContract,
+                },
+                labels: [
+                    Label.fromObject({
+                        entityType: EntityType.ADDRESS,
+                        label: "scam",
+                        confidence: 0.5,
+                    }),
+                    Label.fromObject({
+                        entityType: EntityType.ADDRESS,
+                        label: "scam-contract",
+                        confidence: 0.5,
+                    }),
+                ]
+            }));
+        }
     }
+
+    if (findings.length > 1)  {
+        findings.push(Finding.fromObject({
+            name: `HARD-RUG-PULL-1`,
+            alertId: `HARD-RUG-PULL-1`,
+            description: `${txEvent.transaction.from} deployed a token contract ${createdContract} that may result in a hard rug pull`,
+            severity: FindingSeverity.High,
+            type: FindingType.Suspicious,
+            metadata: {
+                "attacker_deployer_address": txEvent.transaction.from,
+                "token_contract_address": createdContract,
+            },
+            labels: [
+                Label.fromObject({
+                    entityType: EntityType.ADDRESS,
+                    label: "scam",
+                    confidence: 0.8,
+                }),
+                Label.fromObject({
+                    entityType: EntityType.ADDRESS,
+                    label: "scam-contract",
+                    confidence: 0.8,
+                }),
+            ]
+        }));
+    }
+
+    // cleaning
+    fs.rmdirSync('./out', { recursive: true });
 
     return findings;
 };

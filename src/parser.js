@@ -23,25 +23,12 @@ return callableFunctions.includes('owner') &&
 const parseContract = (sourceCode) => {
     const ast = parser.parse(sourceCode, { loc: true });
 
-    let callableFunctions = new Set();
-    let events = new Set();
     const contracts = [];
     for (const node of ast.children) {
         if (node.type === 'ContractDefinition') {
-            for (const fn of node.subNodes) {
-                if (fn.type === 'FunctionDefinition' &&
-                    (fn.visibility === 'public' || fn.visibility === 'external' || fn.visibility === 'default')
-                    && fn.name) {
-                    callableFunctions.add(fn.name);
-                } else if (fn.type === 'EventDefinition') {
-                    events.add(fn.name);
-                }
-            }
             contracts.push(node);
         }
     }
-    callableFunctions = new Array(...callableFunctions)
-    events = new Array(...events)
 
     // construct dependency tree
     const dependencyTree = {};
@@ -63,18 +50,67 @@ const parseContract = (sourceCode) => {
         }
     }
 
+    let callableFunctions = new Set(), internalFunctions = new Set();
+    let events = new Set();
+    let mainNodes = [];
+    const travel = (nodeName) => {
+        for (const node of ast.children) {
+            if (node.type === 'ContractDefinition' && node.name === nodeName) {
+                mainNodes.push(node);
+
+                for (const fn of node.subNodes) {
+                    if (fn.type === 'FunctionDefinition' && fn.name) {
+                        if (fn.visibility === 'public' || fn.visibility === 'external' || fn.visibility === 'default') {
+                            callableFunctions.add(fn.name);
+                        } else {
+                            internalFunctions.add(fn.name);
+                        }
+                    } else if (fn.type === 'StateVariableDeclaration') {
+                        for (const varDecl of fn.variables) {
+                            if (varDecl.visibility === 'public') {
+                                callableFunctions.add(varDecl.name);
+                            }
+                        }
+                    } else if (fn.type === 'EventDefinition') {
+                        events.add(fn.name);
+                    }
+                }
+
+                for (const baseContract of node.baseContracts) {
+                    travel(baseContract.baseName.namePath);
+                }
+            }
+        }
+    }
+    travel(topNode.name);
+    callableFunctions = new Array(...callableFunctions);
+    internalFunctions = new Array(...internalFunctions);
+    events = new Array(...events);
+
+    let hasBalanceVariable = false;
+    parser.visit(mainNodes, {
+        "StateVariableDeclaration": function(node) {
+            for (const varDecl of node.variables) {
+                if (varDecl.name === '_balances' && varDecl.typeName.type === 'Mapping') {
+                    hasBalanceVariable = true;
+                }
+            }
+        }
+    })
 
     return {
         "ast": ast,
         "callableFunctions": callableFunctions,
+        "internalFunctions": internalFunctions,
         "events": events,
         "isTokenContract": isTokenContract(callableFunctions, events),
         "isOwnableContract": isOwnableContract(callableFunctions, events),
         "dependencyTree": dependencyTree,
         "entryContract": topNode,
+        "hasBalanceVariable": hasBalanceVariable,
     };
 }
 
 module.exports = {
-    parseContract
+    parseContract,
 }
