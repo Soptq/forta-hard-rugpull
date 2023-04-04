@@ -146,7 +146,6 @@ const runTaskConsumer = async () => {
 }
 
 const handleTransaction = async (txEvent) => {
-    console.log(`Handling transaction ${txEvent.transaction.hash}...`)
     let findings = [];
 
     const createdContract = await getCreatedContractAddress(txEvent);
