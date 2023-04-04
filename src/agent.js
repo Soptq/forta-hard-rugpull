@@ -150,9 +150,11 @@ const handleTransaction = async (txEvent) => {
 
     const createdContract = await getCreatedContractAddress(txEvent);
     if (!createdContract) return findings;
+    console.log(`Found contract creation transaction ${txEvent.transaction.hash}...`)
 
     let sourceCode = await getSourceCode(txEvent, createdContract);
     if (!sourceCode) return findings;
+    console.log(`Found source code for ${createdContract}...`)
 
     if (sourceCode.startsWith("{")) {
         // multiple contracts in the same file
@@ -185,8 +187,6 @@ const handleTransaction = async (txEvent) => {
     const constructArguments = deploymentData.slice(loc + 32)
     taskQueue.push({txEvent, createdContract, sourceCode, constructArguments});
     console.log(`[${taskQueue.length}] Added task for ${txEvent.transaction.hash}...`)
-
-    await new Promise(r => setTimeout(r, 100000));
 
     if (findingsCache.length > 0) {
         findings = findingsCache;
