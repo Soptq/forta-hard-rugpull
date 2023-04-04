@@ -15,12 +15,13 @@ const fetch = require('node-fetch');
 const { DynamicTest, DefaultInjector } = require('./detectors');
 const HttpsProxyAgent = require('https-proxy-agent');
 const shell = require('shelljs');
-const {exit} = require("shelljs");
 
 const ETHERSCAN_API_KEY = process.env.ETHERSCAN_API_KEY;
 const proxy = process.env.http_proxy
 
-let findingsCount = 0;
+const taskQueue = [];
+let findingsCache = [];
+let isTaskRunning = false;
 
 const getCreatedContractAddress = async (txEvent) => {
     // check if the transaction creates a new contract
@@ -54,12 +55,99 @@ const getSourceCode = async (txEvent, contractAddress) => {
     return data.result[0].SourceCode;
 }
 
+const runTaskConsumer = async () => {
+    console.log("Starting task consumer...")
+    while (true) {
+        if (taskQueue.length === 0) {
+            await new Promise(r => setTimeout(r, 1000));
+            continue;
+        }
+
+        const { txEvent, createdContract, sourceCode, constructArguments } = taskQueue.shift();
+        console.log(`Running task for ${txEvent.transaction.hash}...`)
+
+        let localFindingsCount = 0;
+        let testing;
+
+        try {
+            const injectedSourceCode = DefaultInjector(sourceCode);
+            testing = new DynamicTest(injectedSourceCode, constructArguments);
+        } catch (error) {
+            console.log(error)
+        }
+
+        const results = await testing.test(txEvent);
+
+        for (const [key, value] of Object.entries(results)) {
+            if (!key.startsWith("test/test.sol")) continue;
+            const testName = key.split(":")[1];
+            const result = value["test_results"];
+            let success = true
+            for (const [_, testResult] of Object.entries(result)) {
+                success = success && testResult["success"]
+            }
+
+            if (!success) {
+                findingsCache.push(Finding.fromObject({
+                    name: `HARD-RUG-PULL-${testName.slice(7, -4).toUpperCase()}-DYNAMIC`,
+                    alertId: `HARD-RUG-PULL-${testName.slice(7, -4).toUpperCase()}-DYNAMIC`,
+                    description: `${txEvent.transaction.from} deployed a token contract ${createdContract} that may result in a hard rug pull`,
+                    severity: FindingSeverity.Medium,
+                    type: FindingType.Suspicious,
+                    metadata: {
+                        "attacker_deployer_address": txEvent.transaction.from,
+                        "token_contract_address": createdContract,
+                    },
+                    labels: [
+                        Label.fromObject({
+                            entityType: EntityType.ADDRESS,
+                            label: "scam",
+                            confidence: 0.5,
+                        }),
+                        Label.fromObject({
+                            entityType: EntityType.ADDRESS,
+                            label: "scam-contract",
+                            confidence: 0.5,
+                        }),
+                    ]
+                }));
+                localFindingsCount += 1;
+            }
+        }
+
+        if (localFindingsCount > 1)  {
+            findingsCache.push(Finding.fromObject({
+                name: `HARD-RUG-PULL-1`,
+                alertId: `HARD-RUG-PULL-1`,
+                description: `${txEvent.transaction.from} deployed a token contract ${createdContract} that may result in a hard rug pull`,
+                severity: FindingSeverity.High,
+                type: FindingType.Suspicious,
+                metadata: {
+                    "attacker_deployer_address": txEvent.transaction.from,
+                    "token_contract_address": createdContract,
+                },
+                labels: [
+                    Label.fromObject({
+                        entityType: EntityType.ADDRESS,
+                        label: "scam",
+                        confidence: 0.8,
+                    }),
+                    Label.fromObject({
+                        entityType: EntityType.ADDRESS,
+                        label: "scam-contract",
+                        confidence: 0.8,
+                    }),
+                ]
+            }));
+        }
+
+        fs.rmSync('./out', { recursive: true });
+    }
+}
+
 const handleTransaction = async (txEvent) => {
     console.log(`Handling transaction ${txEvent.transaction.hash}...`)
-    const findings = [];
-
-    // limiting this agent to emit only 5 findings so that the alert feed is not spammed
-    if (findingsCount >= 5) return findings;
+    let findings = [];
 
     const createdContract = await getCreatedContractAddress(txEvent);
     if (!createdContract) return findings;
@@ -87,7 +175,7 @@ const handleTransaction = async (txEvent) => {
         }
 
         // remove files under working
-        fs.rmdirSync('./working', { recursive: true });
+        fs.rmSync('./working', { recursive: true });
     }
 
     const deploymentData = txEvent.transaction.data;
@@ -96,87 +184,22 @@ const handleTransaction = async (txEvent) => {
     if (loc < 0) return findings;
 
     const constructArguments = deploymentData.slice(loc + 32)
-    let testing;
-    try {
-        const injectedSourceCode = DefaultInjector(sourceCode);
-        testing = new DynamicTest(injectedSourceCode, constructArguments);
-    } catch (error) {
-        console.log(error)
-        return findings;
+    taskQueue.push({txEvent, createdContract, sourceCode, constructArguments});
+    console.log(`[${taskQueue.length}] Added task for ${txEvent.transaction.hash}...`)
+
+    await new Promise(r => setTimeout(r, 100000));
+
+    if (findingsCache.length > 0) {
+        findings = findingsCache;
+        findingsCache = [];
     }
-    const results = await testing.test(txEvent);
-
-    for (const [key, value] of Object.entries(results)) {
-        if (!key.startsWith("test/test.sol")) continue;
-        const testName = key.split(":")[1];
-        const result = value["test_results"];
-        let success = true
-        for (const [_, testResult] of Object.entries(result)) {
-            success = success && testResult["success"]
-        }
-
-        if (!success) {
-            findings.push(Finding.fromObject({
-                name: `HARD-RUG-PULL-${testName.slice(7, -4).toUpperCase()}-DYNAMIC`,
-                alertId: `HARD-RUG-PULL-${testName.slice(7, -4).toUpperCase()}-DYNAMIC`,
-                description: `${txEvent.transaction.from} deployed a token contract ${createdContract} that may result in a hard rug pull`,
-                severity: FindingSeverity.Medium,
-                type: FindingType.Suspicious,
-                metadata: {
-                    "attacker_deployer_address": txEvent.transaction.from,
-                    "token_contract_address": createdContract,
-                },
-                labels: [
-                    Label.fromObject({
-                        entityType: EntityType.ADDRESS,
-                        label: "scam",
-                        confidence: 0.5,
-                    }),
-                    Label.fromObject({
-                        entityType: EntityType.ADDRESS,
-                        label: "scam-contract",
-                        confidence: 0.5,
-                    }),
-                ]
-            }));
-        }
-    }
-
-    if (findings.length > 1)  {
-        findings.push(Finding.fromObject({
-            name: `HARD-RUG-PULL-1`,
-            alertId: `HARD-RUG-PULL-1`,
-            description: `${txEvent.transaction.from} deployed a token contract ${createdContract} that may result in a hard rug pull`,
-            severity: FindingSeverity.High,
-            type: FindingType.Suspicious,
-            metadata: {
-                "attacker_deployer_address": txEvent.transaction.from,
-                "token_contract_address": createdContract,
-            },
-            labels: [
-                Label.fromObject({
-                    entityType: EntityType.ADDRESS,
-                    label: "scam",
-                    confidence: 0.8,
-                }),
-                Label.fromObject({
-                    entityType: EntityType.ADDRESS,
-                    label: "scam-contract",
-                    confidence: 0.8,
-                }),
-            ]
-        }));
-    }
-
-    // cleaning
-    fs.rmdirSync('./out', { recursive: true });
 
     return findings;
 };
 
-// const initialize = async () => {
-//   // do some initialization on startup e.g. fetch data
-// }
+const initialize = async () => {
+    runTaskConsumer();
+}
 
 // const handleBlock = async (blockEvent) => {
 //   const findings = [];
@@ -191,7 +214,7 @@ const handleTransaction = async (txEvent) => {
 // };
 
 module.exports = {
-    // initialize,
+    initialize,
     handleTransaction,
     // handleBlock,
     // handleAlert,

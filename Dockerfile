@@ -30,4 +30,4 @@ RUN mkdir test && \
     apk update && \
     apk add --update --no-cache nodejs npm && \
     npm ci --production
-CMD [ "npm", "run", "start:prod" ]
+CMD [ "npm run start:prod" ]
