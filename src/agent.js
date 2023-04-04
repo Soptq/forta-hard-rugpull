@@ -17,6 +17,12 @@ const HttpsProxyAgent = require('https-proxy-agent');
 const shell = require('shelljs');
 
 const ETHERSCAN_API_KEY = process.env.ETHERSCAN_API_KEY;
+const OPTIMISM_ETHERSCAN_API_KEY = process.env.OPTIMISM_ETHERSCAN_API_KEY;
+const BSCSCAN_API_KEY = process.env.BSCSCAN_API_KEY;
+const POLYGONSCAN_API_KEY = process.env.POLYGONSCAN_API_KEY;
+const FTMSCAN_API_KEY = process.env.FTMSCAN_API_KEY;
+const ARBISCAN_API_KEY = process.env.ARBISCAN_API_KEY;
+const SNOWTRACE_API_KEY = process.env.SNOWTRACE_API_KEY;
 const proxy = process.env.http_proxy
 
 const taskQueue = [];
@@ -40,7 +46,19 @@ const getSourceCode = async (txEvent, contractAddress) => {
     let apiEndpoint;
     const network = parseInt(txEvent.network);
     if (network === Network.MAINNET) {
-        apiEndpoint = `https://api.etherscan.io/api?module=contract&action=getsourcecode&address=${contractAddress}&apikey=${ETHERSCAN_API_KEY}`
+        apiEndpoint = `https://api.etherscan.io/api?module=contract&action=getsourcecode&address=${contractAddress}&apikey=${ETHERSCAN_API_KEY}`;
+    } else if (network === Network.OPTIMISM) {
+        apiEndpoint = `https://api-optimistic.etherscan.io/api?module=contract&action=getsourcecode&address=${contractAddress}&apikey=${OPTIMISM_ETHERSCAN_API_KEY}`;
+    } else if (network === Network.BSC) {
+        apiEndpoint = `https://api.bscscan.com/api?module=contract&action=getsourcecode&address=${contractAddress}&apikey=${BSCSCAN_API_KEY}`;
+    } else if (network === Network.POLYGON) {
+        apiEndpoint = `https://api.polygonscan.com/api?module=contract&action=getsourcecode&address=${contractAddress}&apikey=${POLYGONSCAN_API_KEY}`;
+    } else if (network === Network.FANTOM) {
+        apiEndpoint = `https://api.ftmscan.com/api?module=contract&action=getsourcecode&address=${contractAddress}&apikey=${FTMSCAN_API_KEY}`;
+    } else if (network === Network.ARBITRUM) {
+        apiEndpoint = `https://api.arbiscan.io/api?module=contract&action=getsourcecode&address=${contractAddress}&apikey=${ARBISCAN_API_KEY}`;
+    } else if (network === Network.AVALANCHE) {
+        apiEndpoint = `https://api.snowtrace.io/api?module=contract&action=getsourcecode&address=${contractAddress}&apikey=${SNOWTRACE_API_KEY}`;
     } else {
         throw new Error('Network not supported');
     }
