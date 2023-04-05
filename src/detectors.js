@@ -281,6 +281,11 @@ contract DynamicHiddenTransferRevertsTest is Test {
     }
 
     async test(txEvent) {
+        if (!this.contractInfo.isTokenContract && !this.contractInfo.isOwnableContract) {
+            console.log(`Tests skipped for ${txEvent.transaction.hash}`);
+            return {};
+        }
+
         let testedCode = this.sourceCode
 
         if (this.contractInfo.isTokenContract) {

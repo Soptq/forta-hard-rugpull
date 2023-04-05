@@ -67,12 +67,46 @@ const runTaskConsumer = async () => {
     console.log("Starting task consumer...")
     while (true) {
         if (taskQueue.length === 0) {
-            await new Promise(r => setTimeout(r, 1000));
+            await new Promise(r => setTimeout(r, 1000 * 10));
             continue;
         }
 
-        const { txEvent, createdContract, sourceCode, constructArguments } = taskQueue.shift();
+        const { txEvent, createdContract } = taskQueue.shift();
         console.log(`Running task for ${txEvent.transaction.hash}...`)
+
+        let sourceCode = await getSourceCode(txEvent, createdContract);
+        if (!sourceCode) return findingsCache;
+        console.log(`Found source code for ${createdContract}...`)
+
+        if (sourceCode.startsWith("{")) {
+            // multiple contracts in the same file
+            const contractsJson = JSON.parse(sourceCode.slice(1, -1));
+            for (const [contractName, contractSourceCode] of Object.entries(contractsJson.sources)) {
+                // write files locally
+                fs.mkdirSync(getDirName(`./working/${contractName}`), { recursive: true });
+                fs.writeFileSync(`./working/${contractName}`, contractSourceCode.content)
+            }
+
+            // forge flatten
+            let longestFlattenedContractLength = 0;
+            for (const contractName of Object.keys(contractsJson.sources)) {
+                const contractCode = shell.exec(`forge flatten --root ./working ./working/${contractName}`, {silent: true});
+                if (contractCode.length > longestFlattenedContractLength) {
+                    sourceCode = contractCode;
+                    longestFlattenedContractLength = contractCode.length;
+                }
+            }
+
+            // remove files under working
+            fs.rmSync('./working', { recursive: true });
+        }
+
+        const deploymentData = txEvent.transaction.data;
+        const code = await getEthersProvider().getCode(createdContract);
+        const loc = deploymentData.lastIndexOf(code.slice(-32));
+        if (loc < 0) return findingsCache;
+
+        const constructArguments = deploymentData.slice(loc + 32)
 
         let localFindingsCount = 0;
         let testing;
@@ -149,7 +183,9 @@ const runTaskConsumer = async () => {
             }));
         }
 
-        fs.rmSync('./out', { recursive: true });
+        if (fs.existsSync('./out')) {
+            fs.rmSync('./out', {recursive: true});
+        }
     }
 }
 
@@ -160,40 +196,7 @@ const handleTransaction = async (txEvent) => {
     if (!createdContract) return findings;
     console.log(`Found contract creation transaction ${txEvent.transaction.hash}: ${createdContract}...`)
 
-    let sourceCode = await getSourceCode(txEvent, createdContract);
-    if (!sourceCode) return findings;
-    console.log(`Found source code for ${createdContract}...`)
-
-    if (sourceCode.startsWith("{")) {
-        // multiple contracts in the same file
-        const contractsJson = JSON.parse(sourceCode.slice(1, -1));
-        for (const [contractName, contractSourceCode] of Object.entries(contractsJson.sources)) {
-            // write files locally
-            fs.mkdirSync(getDirName(`./working/${contractName}`), { recursive: true });
-            fs.writeFileSync(`./working/${contractName}`, contractSourceCode.content)
-        }
-
-        // forge flatten
-        let longestFlattenedContractLength = 0;
-        for (const contractName of Object.keys(contractsJson.sources)) {
-            const contractCode = shell.exec(`forge flatten --root ./working ./working/${contractName}`, {silent: true});
-            if (contractCode.length > longestFlattenedContractLength) {
-                sourceCode = contractCode;
-                longestFlattenedContractLength = contractCode.length;
-            }
-        }
-
-        // remove files under working
-        fs.rmSync('./working', { recursive: true });
-    }
-
-    const deploymentData = txEvent.transaction.data;
-    const code = await getEthersProvider().getCode(createdContract);
-    const loc = deploymentData.lastIndexOf(code.slice(-32));
-    if (loc < 0) return findings;
-
-    const constructArguments = deploymentData.slice(loc + 32)
-    taskQueue.push({txEvent, createdContract, sourceCode, constructArguments});
+    taskQueue.push({txEvent, createdContract});
     console.log(`[${taskQueue.length}] Added task for ${txEvent.transaction.hash}...`)
 
     if (findingsCache.length > 0) {
