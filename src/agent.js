@@ -58,6 +58,7 @@ const getSourceCode = async (txEvent, contractAddress) => {
         throw new Error('Network not supported');
     }
 
+
     const response = await fetch(apiEndpoint);
     const data = await response.json();
     return data.result[0].SourceCode;
@@ -80,8 +81,17 @@ const runTaskConsumer = async () => {
 
         if (sourceCode.startsWith("{")) {
             // multiple contracts in the same file
-            const contractsJson = JSON.parse(sourceCode.slice(1, -1));
-            for (const [contractName, contractSourceCode] of Object.entries(contractsJson.sources)) {
+            let responseType = 0;
+            if (sourceCode[1] === "{") responseType = 1;
+
+            let inner;
+            if (responseType === 0) {
+                inner = JSON.parse(sourceCode)
+            } else if (responseType === 1) {
+                inner = JSON.parse(sourceCode.slice(1, -1)).sources
+            }
+
+            for (const [contractName, contractSourceCode] of Object.entries(inner)) {
                 // write files locally
                 fs.mkdirSync(getDirName(`./working/${contractName}`), { recursive: true });
                 fs.writeFileSync(`./working/${contractName}`, contractSourceCode.content)
@@ -89,7 +99,7 @@ const runTaskConsumer = async () => {
 
             // forge flatten
             let longestFlattenedContractLength = 0;
-            for (const contractName of Object.keys(contractsJson.sources)) {
+            for (const contractName of Object.keys(inner)) {
                 const contractCode = shell.exec(`forge flatten --root ./working ./working/${contractName}`, {silent: true});
                 if (contractCode.length > longestFlattenedContractLength) {
                     sourceCode = contractCode;
@@ -198,6 +208,7 @@ const handleTransaction = async (txEvent) => {
 
     taskQueue.push({txEvent, createdContract});
     console.log(`[${taskQueue.length}] Added task for ${txEvent.transaction.hash}...`)
+    await new Promise(r => setTimeout(r, 100000));
 
     if (findingsCache.length > 0) {
         findings = findingsCache;
