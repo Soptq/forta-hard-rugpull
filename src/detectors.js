@@ -47,11 +47,6 @@ const DefaultInjector = (sourceCode) => {
         }
     }
 
-    if (contractInfo.isOwnableContract) {
-        // inject transferOwnership() to constructor
-        injectCode += 'transferOwnership(msg.sender); '
-    }
-
     if (!constructor) {
         injectCode += '}'
     }
@@ -123,6 +118,7 @@ contract DynamicHoneypotTest is Test {
     function setUp() public {
         target = new ${entryContract.name}(${args.join(", ")});
         ${this.contractInfo.hasBalanceVariable ? 'deal(address(target), address(this), 1e20);' : ''}
+        ${this.contractInfo.isOwnableContract ? 'address testAddress = address(this);vm.startPrank(address(target.owner()));target.transfer(testAddress, target.balanceOf(target.owner()));target.transferOwnership(testAddress);vm.stopPrank();' : ''}
         uint balanceInitial = target.balanceOf(address(this));
         if (balanceInitial > 0) {
             willSkip = false;
@@ -155,6 +151,7 @@ contract DynamicHiddenMintsTest is Test {
 
     function setUp() public {
         target = new ${entryContract.name}(${args.join(", ")});
+        ${this.contractInfo.isOwnableContract ? 'address testAddress = address(this);vm.startPrank(address(target.owner()));target.transfer(testAddress, target.balanceOf(target.owner()));target.transferOwnership(testAddress);vm.stopPrank();' : ''}
         totalSupply = target.totalSupply();
         targetSender(address(this));
         skip(60 * 60 * 24 * 365);
@@ -171,6 +168,7 @@ contract DynamicFakeOwnershipRenounciationTest is Test {
 
     function setUp() public {
         target = new ${entryContract.name}(${args.join(", ")});
+        ${this.contractInfo.isOwnableContract ? 'address testAddress = address(this);vm.startPrank(address(target.owner()));target.transfer(testAddress, target.balanceOf(target.owner()));target.transferOwnership(testAddress);vm.stopPrank();' : ''}
         targetSender(address(this));
         // transfer ownership to 0x1
         target.transferOwnership(address(0x1));
@@ -192,6 +190,7 @@ contract DynamicHiddenTransfersTest is Test {
     function setUp() public {
         target = new ${entryContract.name}(${args.join(", ")});
         ${this.contractInfo.hasBalanceVariable ? 'deal(address(target), address(this), 1e20);' : ''}
+        ${this.contractInfo.isOwnableContract ? 'address testAddress = address(this);vm.startPrank(address(target.owner()));target.transfer(testAddress, target.balanceOf(target.owner()));target.transferOwnership(testAddress);vm.stopPrank();' : ''}
         uint balanceInitial = target.balanceOf(address(this));
         if (balanceInitial > 0) {
             willSkip = false;
@@ -220,6 +219,7 @@ contract DynamicHiddenFeeModifiersTest is Test {
     function setUp() public {
         target = new ${entryContract.name}(${args.join(", ")});
         ${this.contractInfo.hasBalanceVariable ? 'deal(address(target), address(this), 1e20);' : ''}
+        ${this.contractInfo.isOwnableContract ? 'address testAddress = address(this);vm.startPrank(address(target.owner()));target.transfer(testAddress, target.balanceOf(target.owner()));target.transferOwnership(testAddress);vm.stopPrank();' : ''}
         uint balanceInitial = target.balanceOf(address(this));
         if (balanceInitial > 0) {
             willSkip = false;
@@ -259,6 +259,7 @@ contract DynamicHiddenTransferRevertsTest is Test {
     function setUp() public {
         target = new ${entryContract.name}(${args.join(", ")});
         ${this.contractInfo.hasBalanceVariable ? 'deal(address(target), address(this), 1e20);' : ''}
+        ${this.contractInfo.isOwnableContract ? 'address testAddress = address(this);vm.startPrank(address(target.owner()));target.transfer(testAddress, target.balanceOf(target.owner()));target.transferOwnership(testAddress);vm.stopPrank();' : ''}
         uint balanceInitial = target.balanceOf(address(this));
         if (balanceInitial > 0) {
             willSkip = false;
