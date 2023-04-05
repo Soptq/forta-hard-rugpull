@@ -72,79 +72,104 @@ const runTaskConsumer = async () => {
             continue;
         }
 
-        const { txEvent, createdContract } = taskQueue.shift();
-        console.log(`Running task for ${txEvent.transaction.hash}...`)
+        try {
+            const { txEvent, createdContract } = taskQueue.shift();
+            console.log(`Running task for ${txEvent.transaction.hash}...`)
 
-        let sourceCode = await getSourceCode(txEvent, createdContract);
-        if (!sourceCode) return findingsCache;
-        console.log(`Found source code for ${createdContract}...`)
+            let sourceCode = await getSourceCode(txEvent, createdContract);
+            if (!sourceCode) return findingsCache;
+            console.log(`Found source code for ${createdContract}...`)
 
-        if (sourceCode.startsWith("{")) {
-            // multiple contracts in the same file
-            let responseType = 0;
-            if (sourceCode[1] === "{") responseType = 1;
+            if (sourceCode.startsWith("{")) {
+                // multiple contracts in the same file
+                let responseType = 0;
+                if (sourceCode[1] === "{") responseType = 1;
 
-            let inner;
-            if (responseType === 0) {
-                inner = JSON.parse(sourceCode)
-            } else if (responseType === 1) {
-                inner = JSON.parse(sourceCode.slice(1, -1)).sources
+                let inner;
+                if (responseType === 0) {
+                    inner = JSON.parse(sourceCode)
+                } else if (responseType === 1) {
+                    inner = JSON.parse(sourceCode.slice(1, -1)).sources
+                }
+
+                for (const [contractName, contractSourceCode] of Object.entries(inner)) {
+                    // write files locally
+                    fs.mkdirSync(getDirName(`./working/${contractName}`), { recursive: true });
+                    fs.writeFileSync(`./working/${contractName}`, contractSourceCode.content)
+                }
+
+                // forge flatten
+                let longestFlattenedContractLength = 0;
+                for (const contractName of Object.keys(inner)) {
+                    const contractCode = shell.exec(`forge flatten --root ./working ./working/${contractName}`, {silent: true});
+                    if (contractCode.length > longestFlattenedContractLength) {
+                        sourceCode = contractCode;
+                        longestFlattenedContractLength = contractCode.length;
+                    }
+                }
+
+                // remove files under working
+                fs.rmSync('./working', { recursive: true });
             }
 
-            for (const [contractName, contractSourceCode] of Object.entries(inner)) {
-                // write files locally
-                fs.mkdirSync(getDirName(`./working/${contractName}`), { recursive: true });
-                fs.writeFileSync(`./working/${contractName}`, contractSourceCode.content)
-            }
+            const deploymentData = txEvent.transaction.data;
+            const code = await getEthersProvider().getCode(createdContract);
+            const loc = deploymentData.lastIndexOf(code.slice(-32));
+            if (loc < 0) return findingsCache;
 
-            // forge flatten
-            let longestFlattenedContractLength = 0;
-            for (const contractName of Object.keys(inner)) {
-                const contractCode = shell.exec(`forge flatten --root ./working ./working/${contractName}`, {silent: true});
-                if (contractCode.length > longestFlattenedContractLength) {
-                    sourceCode = contractCode;
-                    longestFlattenedContractLength = contractCode.length;
+            const constructArguments = deploymentData.slice(loc + 32)
+
+            let localFindingsCount = 0;
+            let testing;
+
+            const injectedSourceCode = DefaultInjector(sourceCode);
+            testing = new DynamicTest(injectedSourceCode, constructArguments);
+
+            const results = await testing.test(txEvent);
+
+            for (const [key, value] of Object.entries(results)) {
+                if (!key.startsWith("test/test.sol")) continue;
+                const testName = key.split(":")[1];
+                const result = value["test_results"];
+                let success = true
+                for (const [_, testResult] of Object.entries(result)) {
+                    success = success && testResult["success"]
+                }
+
+                if (!success) {
+                    findingsCache.push(Finding.fromObject({
+                        name: `HARD-RUG-PULL-${testName.slice(7, -4).toUpperCase()}-DYNAMIC`,
+                        alertId: `HARD-RUG-PULL-${testName.slice(7, -4).toUpperCase()}-DYNAMIC`,
+                        description: `${txEvent.transaction.from} deployed a token contract ${createdContract} that may result in a hard rug pull`,
+                        severity: FindingSeverity.Medium,
+                        type: FindingType.Suspicious,
+                        metadata: {
+                            "attacker_deployer_address": txEvent.transaction.from,
+                            "token_contract_address": createdContract,
+                        },
+                        labels: [
+                            Label.fromObject({
+                                entityType: EntityType.ADDRESS,
+                                label: "scam",
+                                confidence: 0.5,
+                            }),
+                            Label.fromObject({
+                                entityType: EntityType.ADDRESS,
+                                label: "scam-contract",
+                                confidence: 0.5,
+                            }),
+                        ]
+                    }));
+                    localFindingsCount += 1;
                 }
             }
 
-            // remove files under working
-            fs.rmSync('./working', { recursive: true });
-        }
-
-        const deploymentData = txEvent.transaction.data;
-        const code = await getEthersProvider().getCode(createdContract);
-        const loc = deploymentData.lastIndexOf(code.slice(-32));
-        if (loc < 0) return findingsCache;
-
-        const constructArguments = deploymentData.slice(loc + 32)
-
-        let localFindingsCount = 0;
-        let testing;
-
-        try {
-            const injectedSourceCode = DefaultInjector(sourceCode);
-            testing = new DynamicTest(injectedSourceCode, constructArguments);
-        } catch (error) {
-            console.log(error)
-        }
-
-        const results = await testing.test(txEvent);
-
-        for (const [key, value] of Object.entries(results)) {
-            if (!key.startsWith("test/test.sol")) continue;
-            const testName = key.split(":")[1];
-            const result = value["test_results"];
-            let success = true
-            for (const [_, testResult] of Object.entries(result)) {
-                success = success && testResult["success"]
-            }
-
-            if (!success) {
+            if (localFindingsCount > 1)  {
                 findingsCache.push(Finding.fromObject({
-                    name: `HARD-RUG-PULL-${testName.slice(7, -4).toUpperCase()}-DYNAMIC`,
-                    alertId: `HARD-RUG-PULL-${testName.slice(7, -4).toUpperCase()}-DYNAMIC`,
+                    name: `HARD-RUG-PULL-1`,
+                    alertId: `HARD-RUG-PULL-1`,
                     description: `${txEvent.transaction.from} deployed a token contract ${createdContract} that may result in a hard rug pull`,
-                    severity: FindingSeverity.Medium,
+                    severity: FindingSeverity.High,
                     type: FindingType.Suspicious,
                     metadata: {
                         "attacker_deployer_address": txEvent.transaction.from,
@@ -154,47 +179,22 @@ const runTaskConsumer = async () => {
                         Label.fromObject({
                             entityType: EntityType.ADDRESS,
                             label: "scam",
-                            confidence: 0.5,
+                            confidence: 0.8,
                         }),
                         Label.fromObject({
                             entityType: EntityType.ADDRESS,
                             label: "scam-contract",
-                            confidence: 0.5,
+                            confidence: 0.8,
                         }),
                     ]
                 }));
-                localFindingsCount += 1;
             }
-        }
 
-        if (localFindingsCount > 1)  {
-            findingsCache.push(Finding.fromObject({
-                name: `HARD-RUG-PULL-1`,
-                alertId: `HARD-RUG-PULL-1`,
-                description: `${txEvent.transaction.from} deployed a token contract ${createdContract} that may result in a hard rug pull`,
-                severity: FindingSeverity.High,
-                type: FindingType.Suspicious,
-                metadata: {
-                    "attacker_deployer_address": txEvent.transaction.from,
-                    "token_contract_address": createdContract,
-                },
-                labels: [
-                    Label.fromObject({
-                        entityType: EntityType.ADDRESS,
-                        label: "scam",
-                        confidence: 0.8,
-                    }),
-                    Label.fromObject({
-                        entityType: EntityType.ADDRESS,
-                        label: "scam-contract",
-                        confidence: 0.8,
-                    }),
-                ]
-            }));
-        }
-
-        if (fs.existsSync('./out')) {
-            fs.rmSync('./out', {recursive: true});
+            if (fs.existsSync('./out')) {
+                fs.rmSync('./out', {recursive: true});
+            }
+        } catch (e) {
+            console.log(e)
         }
     }
 }
