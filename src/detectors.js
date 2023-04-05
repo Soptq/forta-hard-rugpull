@@ -34,10 +34,10 @@ const DefaultInjector = (sourceCode) => {
 
     if (!constructor) {
         injectCode = '\nconstructor() public { '
-        injectLocation = entryContract.loc.end.line;
+        injectLocation = [entryContract.loc.end.line, entryContract.loc.end.column];
     } else {
         injectCode = '\n'
-        injectLocation = constructor.loc.end.line;
+        injectLocation = [constructor.loc.end.line, constructor.loc.end.column];
     }
 
     if (contractInfo.isTokenContract) {
@@ -57,8 +57,10 @@ const DefaultInjector = (sourceCode) => {
     }
 
     // add injectCode to formattedSourceCode at line injectLocation
-    let injectSourceCode = formattedSourceCode.split('\n').slice(0, injectLocation - 1).join('\n') +
-        injectCode + formattedSourceCode.split('\n').slice(injectLocation - 1).join('\n');
+    let injectSourceCode = formattedSourceCode.split('\n').slice(0, injectLocation[0] - 1).join('\n') +
+        "\n" + formattedSourceCode.split('\n')[injectLocation[0] - 1].slice(0, injectLocation[1]) +
+        injectCode + formattedSourceCode.split('\n')[injectLocation[0] - 1].slice(injectLocation[1]) + "\n" +
+        formattedSourceCode.split('\n').slice(injectLocation[0]).join('\n');
     // add forge library
     if (injectSourceCode.includes("pragma experimental ABIEncoderV2") < 0) {
         injectSourceCode += '\npragma experimental ABIEncoderV2;\n';

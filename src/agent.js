@@ -58,7 +58,6 @@ const getSourceCode = async (txEvent, contractAddress) => {
         throw new Error('Network not supported');
     }
 
-
     const response = await fetch(apiEndpoint);
     const data = await response.json();
     return data.result[0].SourceCode;
@@ -77,7 +76,7 @@ const runTaskConsumer = async () => {
             console.log(`Running task for ${txEvent.transaction.hash}...`)
 
             let sourceCode = await getSourceCode(txEvent, createdContract);
-            if (!sourceCode) return findingsCache;
+            if (!sourceCode) continue;
             console.log(`Found source code for ${createdContract}...`)
 
             if (sourceCode.startsWith("{")) {
@@ -115,7 +114,7 @@ const runTaskConsumer = async () => {
             const deploymentData = txEvent.transaction.data;
             const code = await getEthersProvider().getCode(createdContract);
             const loc = deploymentData.lastIndexOf(code.slice(-32));
-            if (loc < 0) return findingsCache;
+            if (loc < 0) continue;
 
             const constructArguments = deploymentData.slice(loc + 32)
 
