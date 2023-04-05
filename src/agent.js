@@ -208,7 +208,6 @@ const handleTransaction = async (txEvent) => {
 
     taskQueue.push({txEvent, createdContract});
     console.log(`[${taskQueue.length}] Added task for ${txEvent.transaction.hash}...`)
-    await new Promise(r => setTimeout(r, 100000));
 
     if (findingsCache.length > 0) {
         findings = findingsCache;
