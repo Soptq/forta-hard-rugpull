@@ -4,7 +4,7 @@ const {
     FindingSeverity,
     FindingType,
     getEthersProvider,
-    getTransactionReceipt,
+    ethers,
     Label,
     Network,
     EntityType,
@@ -27,16 +27,14 @@ const taskQueue = [];
 let findingsCache = [];
 
 const getCreatedContractAddress = async (txEvent) => {
-    // check if the transaction creates a new contract
-    const toAddress = txEvent.transaction.to;
-    const txContractAddress = txEvent.contractAddress;
-
-    if (toAddress || txContractAddress) {
-        return null;
+    if (!txEvent.to) {
+        return ethers.utils.getAddress(ethers.utils.getContractAddress({
+            from: txEvent.from,
+            nonce: txEvent.transaction.nonce,
+        }));
     }
 
-    const receipt = await getTransactionReceipt(txEvent.hash);
-    return receipt.contractAddress
+    return null;
 }
 
 const getSourceCode = async (txEvent, contractAddress) => {
@@ -158,10 +156,9 @@ const runTaskConsumer = async () => {
 const handleTransaction = async (txEvent) => {
     let findings = [];
 
-    console.log(`Found transaction ${txEvent.transaction.hash}, ${txEvent.transaction.to}, ${txEvent.contractAddress}, ${txEvent.transaction.to || txEvent.contractAddress}...`)
     const createdContract = await getCreatedContractAddress(txEvent);
     if (!createdContract) return findings;
-    console.log(`Found contract creation transaction ${txEvent.transaction.hash}...`)
+    console.log(`Found contract creation transaction ${txEvent.transaction.hash}: ${createdContract}...`)
 
     let sourceCode = await getSourceCode(txEvent, createdContract);
     if (!sourceCode) return findings;
