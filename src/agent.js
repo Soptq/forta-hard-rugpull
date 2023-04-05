@@ -158,6 +158,7 @@ const runTaskConsumer = async () => {
 const handleTransaction = async (txEvent) => {
     let findings = [];
 
+    console.log(`Found transaction ${txEvent.transaction.hash}, ${txEvent.transaction.to}, ${txEvent.contractAddress}, ${txEvent.transaction.to || txEvent.contractAddress}...`)
     const createdContract = await getCreatedContractAddress(txEvent);
     if (!createdContract) return findings;
     console.log(`Found contract creation transaction ${txEvent.transaction.hash}...`)
