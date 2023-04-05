@@ -168,7 +168,6 @@ contract DynamicFakeOwnershipRenounciationTest is Test {
 
     function setUp() public {
         target = new ${entryContract.name}(${args.join(", ")});
-        ${this.contractInfo.isOwnableContract ? 'address testAddress = address(this);vm.startPrank(address(target.owner()));target.transfer(testAddress, target.balanceOf(target.owner()));target.transferOwnership(testAddress);vm.stopPrank();' : ''}
         targetSender(address(this));
         // transfer ownership to 0x1
         target.transferOwnership(address(0x1));
