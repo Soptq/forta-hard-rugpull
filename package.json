@@ -1,17 +1,17 @@
 {
   "name": "forta-hard-rugpull",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "description": "A forta agent that detects hard rugpulls",
   "repository": "https://github.com/Soptq/forta-hard-rugpull",
   "chainIds": [
-    1, 10, 56, 137, 250, 42161, 43114
+    1,
+    10,
+    56,
+    137,
+    250,
+    42161,
+    43114
   ],
-  "chainSettings": {
-    "default": {
-      "shards": 3,
-      "target": 2
-    }
-  },
   "scripts": {
     "start": "npm run start:dev",
     "start:dev": "nodemon --watch src --watch forta.config.json -e js,json --exec \"forta-agent run\"",
@@ -35,7 +35,6 @@
     "@solidity-parser/parser": "^0.16.0",
     "dotenv": "^16.0.3",
     "forta-agent": "^0.1.24",
-    "https-proxy-agent": "^5.0.1",
     "node-fetch": "^2.6.9",
     "prettier": "^2.8.7",
     "prettier-plugin-solidity": "^1.1.3",

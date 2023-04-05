@@ -13,7 +13,6 @@ const fs = require('fs');
 const getDirName = require('path').dirname;
 const fetch = require('node-fetch');
 const { DynamicTest, DefaultInjector } = require('./detectors');
-const HttpsProxyAgent = require('https-proxy-agent');
 const shell = require('shelljs');
 
 const ETHERSCAN_API_KEY = process.env.ETHERSCAN_API_KEY;
@@ -23,11 +22,9 @@ const POLYGONSCAN_API_KEY = process.env.POLYGONSCAN_API_KEY;
 const FTMSCAN_API_KEY = process.env.FTMSCAN_API_KEY;
 const ARBISCAN_API_KEY = process.env.ARBISCAN_API_KEY;
 const SNOWTRACE_API_KEY = process.env.SNOWTRACE_API_KEY;
-const proxy = process.env.http_proxy
 
 const taskQueue = [];
 let findingsCache = [];
-let isTaskRunning = false;
 
 const getCreatedContractAddress = async (txEvent) => {
     // check if the transaction creates a new contract
@@ -63,12 +60,7 @@ const getSourceCode = async (txEvent, contractAddress) => {
         throw new Error('Network not supported');
     }
 
-    let response;
-    if (proxy) {
-        response = await fetch(apiEndpoint, {agent: new HttpsProxyAgent(proxy)});
-    } else {
-        response = await fetch(apiEndpoint);
-    }
+    const response = await fetch(apiEndpoint);
     const data = await response.json();
     return data.result[0].SourceCode;
 }
