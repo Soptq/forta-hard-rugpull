@@ -57,7 +57,7 @@ const DefaultInjector = (sourceCode) => {
         injectCode + formattedSourceCode.split('\n')[injectLocation[0] - 1].slice(injectLocation[1]) + "\n" +
         formattedSourceCode.split('\n').slice(injectLocation[0]).join('\n');
     // add forge library
-    if (injectSourceCode.includes("pragma experimental ABIEncoderV2") < 0) {
+    if (!injectSourceCode.includes("pragma experimental ABIEncoderV2")) {
         injectSourceCode += '\npragma experimental ABIEncoderV2;\n';
     }
     injectSourceCode += '\nimport "forge-std/Test.sol";\n';
@@ -321,7 +321,7 @@ contract DynamicHiddenTransferRevertsTest is Test {
             console.log(`Tested ${txEvent.transaction.hash}: ${timeAfter - timeBefore}ms`);
             testResultJson = JSON.parse(testResult);
         } catch (e) {
-            console.error(e)
+            // console.error(e)
             return {};
         }
 
