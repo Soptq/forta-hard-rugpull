@@ -125,6 +125,7 @@ const runTaskConsumer = async () => {
             testing = new DynamicTest(injectedSourceCode, constructArguments);
 
             const results = await testing.test(txEvent);
+            const rugpullTechniques = [];
 
             for (const [key, value] of Object.entries(results)) {
                 if (!key.startsWith("test/test.sol")) continue;
@@ -136,6 +137,7 @@ const runTaskConsumer = async () => {
                 }
 
                 if (!success) {
+                    rugpullTechniques.push(testName.slice(7, -4).toUpperCase());
                     findingsCache.push(Finding.fromObject({
                         name: `HARD-RUG-PULL-${testName.slice(7, -4).toUpperCase()}-DYNAMIC`,
                         alertId: `HARD-RUG-PULL-${testName.slice(7, -4).toUpperCase()}-DYNAMIC`,
@@ -173,6 +175,7 @@ const runTaskConsumer = async () => {
                     metadata: {
                         "attacker_deployer_address": txEvent.transaction.from,
                         "token_contract_address": createdContract,
+                        "rugpull_techniques": rugpullTechniques.join(", ")
                     },
                     labels: [
                         Label.fromObject({
@@ -193,7 +196,7 @@ const runTaskConsumer = async () => {
                 fs.rmSync('./out', {recursive: true});
             }
         } catch (e) {
-            console.log(e)
+            // console.log(e)
         }
     }
 }

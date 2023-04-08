@@ -168,6 +168,7 @@ contract DynamicFakeOwnershipRenounciationTest is Test {
 
     function setUp() public {
         target = new ${entryContract.name}(${args.join(", ")});
+        ${this.contractInfo.isOwnableContract ? 'address testAddress = address(this);vm.startPrank(address(target.owner()));target.transferOwnership(testAddress);vm.stopPrank();' : ''}
         targetSender(address(this));
         // transfer ownership to 0x1
         target.transferOwnership(address(0x1));
@@ -283,8 +284,8 @@ contract DynamicHiddenTransferRevertsTest is Test {
     }
 
     async test(txEvent) {
-        if (!this.contractInfo.isTokenContract && !this.contractInfo.isOwnableContract) {
-            console.log(`Tests skipped for ${txEvent.transaction.hash}`);
+        if (!this.contractInfo.isTokenContract) {
+            console.log(`Tests skipped for ${txEvent.transaction.hash}: not a standard ERC20 token contract`);
             return {};
         } else {
             console.log(`Testing ${txEvent.transaction.hash}...`)
