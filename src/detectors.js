@@ -243,11 +243,13 @@ contract DynamicHiddenFeeModifiersTest is Test {
         
         vm.startPrank(address(0x1));
         uint256 balanceBefore = target.balanceOf(address(0x2));
-        try target.transfer(address(0x2), 1e5) {
+        try target.transfer(address(0x2), 1e5) returns (bool success) {
             uint256 balanceAfter = target.balanceOf(address(0x2));
-            uint256 currentFee = 1e5 - (balanceAfter - balanceBefore);
-            vm.stopPrank();
-            assertEq(fee, currentFee);
+            if (success || balanceAfter > balanceBefore) {
+                uint256 currentFee = 1e5 - (balanceAfter - balanceBefore);
+                vm.stopPrank();
+                assertEq(fee, currentFee);
+            }
         } catch  {
             vm.stopPrank();
         }
