@@ -132,7 +132,8 @@ const runTaskConsumer = async () => {
                 const testName = key.split(":")[1];
                 const result = value["test_results"];
                 let success = true
-                for (const [_, testResult] of Object.entries(result)) {
+                for (const [subTestName, testResult] of Object.entries(result)) {
+                    if (subTestName === "setUp()") continue;
                     success = success && testResult["success"]
                 }
 
