@@ -206,7 +206,10 @@ const handleTransaction = async (txEvent) => {
     let findings = [];
 
     const createdContract = await getCreatedContractAddress(txEvent);
-    if (!createdContract) return findings;
+    if (!createdContract) {
+        console.log(`No contract created in transaction ${txEvent.transaction.hash}.`)
+        return findings;
+    }
     console.log(`Found contract creation transaction ${txEvent.transaction.hash}: ${createdContract}...`)
 
     taskQueue.push({txEvent, createdContract});
