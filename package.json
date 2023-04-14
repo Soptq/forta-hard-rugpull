@@ -1,6 +1,6 @@
 {
   "name": "forta-hard-rugpull",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "A forta agent that detects hard rugpulls",
   "repository": "https://github.com/Soptq/forta-hard-rugpull",
   "chainIds": [
@@ -39,6 +39,7 @@
   },
   "dependencies": {
     "@solidity-parser/parser": "^0.16.0",
+    "bluebird": "^3.7.2",
     "dotenv": "^16.0.3",
     "forta-agent": "^0.1.24",
     "node-fetch": "^2.6.9",
