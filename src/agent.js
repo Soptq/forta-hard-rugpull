@@ -197,7 +197,7 @@ const runTaskConsumer = async () => {
                 fs.rmSync('./out', {recursive: true});
             }
         } catch (e) {
-            // console.log(e)
+            console.log(e)
         }
     }
 }
@@ -207,7 +207,7 @@ const handleTransaction = async (txEvent) => {
 
     const createdContract = await getCreatedContractAddress(txEvent);
     if (!createdContract) {
-        console.log(`No contract created in transaction ${txEvent.transaction.hash}.`)
+        // console.log(`No contract created in transaction ${txEvent.transaction.hash}.`)
         return findings;
     }
     console.log(`Found contract creation transaction ${txEvent.transaction.hash}: ${createdContract}...`)
