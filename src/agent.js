@@ -13,7 +13,7 @@ const fs = require('fs');
 const getDirName = require('path').dirname;
 const fetch = require('node-fetch');
 const { DynamicTest, DefaultInjector } = require('./detectors');
-const execAsync = require('./execAsync');
+const shell = require('shelljs');
 
 const ETHERSCAN_API_KEY = process.env.ETHERSCAN_API_KEY;
 const OPTIMISM_ETHERSCAN_API_KEY = process.env.OPTIMISM_ETHERSCAN_API_KEY;
@@ -100,7 +100,7 @@ const runTaskConsumer = async () => {
                 // forge flatten
                 let longestFlattenedContractLength = 0;
                 for (const contractName of Object.keys(inner)) {
-                    const contractCode = (await execAsync(`forge flatten --root ./working ./working/${contractName}`, {silent: true})).toString();
+                    const contractCode = shell.exec(`forge flatten --root ./working ./working/${contractName}`, {silent: true});
                     if (contractCode.length > longestFlattenedContractLength) {
                         sourceCode = contractCode;
                         longestFlattenedContractLength = contractCode.length;
@@ -197,7 +197,7 @@ const runTaskConsumer = async () => {
                 fs.rmSync('./out', {recursive: true});
             }
         } catch (e) {
-            console.log(e)
+            // console.log(e)
         }
     }
 }
@@ -207,7 +207,7 @@ const handleTransaction = async (txEvent) => {
 
     const createdContract = await getCreatedContractAddress(txEvent);
     if (!createdContract) {
-        // console.log(`No contract created in transaction ${txEvent.transaction.hash}.`)
+        console.log(`No contract created in transaction ${txEvent.transaction.hash}.`)
         return findings;
     }
     console.log(`Found contract creation transaction ${txEvent.transaction.hash}: ${createdContract}...`)

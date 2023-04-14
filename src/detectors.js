@@ -6,7 +6,7 @@ const parser = require('@solidity-parser/parser');
 const { parseContract } = require('./parser')
 const prettier = require("prettier");
 const fs = require('fs');
-const execAsync = require('./execAsync');
+const shell = require('shelljs');
 
 const findConstructor = (entryContract) => {
     let constructor;
@@ -316,7 +316,7 @@ contract DynamicHiddenTransferRevertsTest is Test {
         try {
             const testCommand = `RUST_LOG=off forge test -f ${getJsonRpcUrl()} --fork-block-number ${txEvent.block.number} --json --silent`
             const timeBefore = Date.now();
-            const testResult = (await execAsync(testCommand, {silent: true})).toString();
+            const testResult = await shell.exec(testCommand, {silent: true}).toString();
             const timeAfter = Date.now();
             console.log(`Tested ${txEvent.transaction.hash}: ${timeAfter - timeBefore}ms`);
             testResultJson = JSON.parse(testResult);
