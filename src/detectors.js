@@ -94,19 +94,22 @@ class DynamicTest {
 
                 return `${name}${depth.map(d => `[${d}]`).join('')}`;
             });
-
-            for (const arg of ethers.utils.defaultAbiCoder.decode(types, `0x${constructorArguments}`)) {
-                if (ethers.BigNumber.isBigNumber(arg)) {
-                    args.push(arg.toString());
-                } else if (typeof arg === 'string') {
-                    if (arg.startsWith("0x")) {
-                        args.push(arg);
+            try {
+                for (const arg of ethers.utils.defaultAbiCoder.decode(types, `0x${constructorArguments}`)) {
+                    if (ethers.BigNumber.isBigNumber(arg)) {
+                        args.push(arg.toString());
+                    } else if (typeof arg === 'string') {
+                        if (arg.startsWith("0x")) {
+                            args.push(arg);
+                        } else {
+                            args.push(`"${arg}"`);
+                        }
                     } else {
-                        args.push(`"${arg}"`);
+                        args.push(arg);
                     }
-                } else {
-                    args.push(arg);
                 }
+            } catch (e) {
+
             }
         }
 

@@ -29,5 +29,6 @@ COPY package*.json .env foundry.toml ./
 RUN mkdir test && \
     apk update && \
     apk add --update --no-cache nodejs npm && \
-    npm ci --production
-CMD [ "npm run start:prod" ]
+    npm ci --production && \
+    npm install pm2 -g
+CMD [ "pm2 start start.sh --cron-restart='0 0 * * *'" ]

@@ -100,7 +100,7 @@ const runTaskConsumer = async () => {
                 // forge flatten
                 let longestFlattenedContractLength = 0;
                 for (const contractName of Object.keys(inner)) {
-                    const contractCode = shell.exec(`forge flatten --root ./working ./working/${contractName}`, {silent: true});
+                    const contractCode = await shell.exec(`forge flatten --root ./working ./working/${contractName}`, {silent: true}).toString();
                     if (contractCode.length > longestFlattenedContractLength) {
                         sourceCode = contractCode;
                         longestFlattenedContractLength = contractCode.length;
