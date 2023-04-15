@@ -31,4 +31,4 @@ RUN mkdir test && \
     apk add --update --no-cache nodejs npm && \
     npm ci --production && \
     npm install pm2 -g
-CMD [ "pm2 start start.sh --cron-restart='0 0 * * *'" ]
+CMD [ "pm2 start 'npm run start:prod' --cron-restart='0 0 * * *' && pm2 logs" ]
