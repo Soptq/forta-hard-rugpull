@@ -80,6 +80,11 @@ const runTaskConsumer = async () => {
             console.log(`Found source code for ${createdContract}...`)
 
             if (sourceCode.startsWith("{")) {
+                // remove files under working
+                if (fs.existsSync('./working')) {
+                    fs.rmSync('./working', {recursive: true});
+                }
+
                 // multiple contracts in the same file
                 let responseType = 0;
                 if (sourceCode[1] === "{") responseType = 1;
@@ -106,9 +111,6 @@ const runTaskConsumer = async () => {
                         longestFlattenedContractLength = contractCode.length;
                     }
                 }
-
-                // remove files under working
-                fs.rmSync('./working', { recursive: true });
             }
 
             const deploymentData = txEvent.transaction.data;
@@ -120,6 +122,10 @@ const runTaskConsumer = async () => {
 
             let localFindingsCount = 0;
             let testing;
+
+            if (fs.existsSync('./out')) {
+                fs.rmSync('./out', {recursive: true});
+            }
 
             const injectedSourceCode = DefaultInjector(sourceCode);
             testing = new DynamicTest(injectedSourceCode, constructArguments);
@@ -191,10 +197,6 @@ const runTaskConsumer = async () => {
                         }),
                     ]
                 }));
-            }
-
-            if (fs.existsSync('./out')) {
-                fs.rmSync('./out', {recursive: true});
             }
         } catch (e) {
             console.log(e)
