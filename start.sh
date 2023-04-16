@@ -1,1 +1,1 @@
-pkill -f forta-agent; npm run start:prod
+pkill -f forta-agent; pkill -f forge; npm run start:prod

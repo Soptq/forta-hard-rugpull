@@ -25,6 +25,7 @@ const SNOWTRACE_API_KEY = process.env.SNOWTRACE_API_KEY;
 
 const taskQueue = [];
 let findingsCache = [];
+let consumerStarted = false;
 
 const getCreatedContractAddress = async (txEvent) => {
     if (!txEvent.to) {
@@ -65,6 +66,7 @@ const getSourceCode = async (txEvent, contractAddress) => {
 
 const runTaskConsumer = async () => {
     console.log("Starting task consumer...")
+    consumerStarted = true;
     while (true) {
         if (taskQueue.length === 0) {
             await new Promise(r => setTimeout(r, 1000 * 10));
@@ -206,6 +208,10 @@ const runTaskConsumer = async () => {
 
 const handleTransaction = async (txEvent) => {
     let findings = [];
+
+    if (!consumerStarted) {
+        runTaskConsumer();
+    }
 
     const createdContract = await getCreatedContractAddress(txEvent);
     if (!createdContract) {
