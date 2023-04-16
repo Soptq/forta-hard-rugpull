@@ -31,4 +31,4 @@ RUN mkdir test && \
     apk add --update --no-cache nodejs npm procps && \
     npm ci --production && \
     npm install pm2 -g
-CMD [ "pm2 start 'kill -9 $(lsof -t -i:50051); pkill -f forta-agent; npm run start:prod' --cron-restart='0 0 * * *' && pm2 logs" ]
+CMD [ "pm2 start 'pkill -f forta-agent; npm run start:prod' --cron-restart='0 0 * * *' && pm2 logs" ]
