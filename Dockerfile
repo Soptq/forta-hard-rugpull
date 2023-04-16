@@ -25,10 +25,10 @@ RUN git init && \
     git config --global user.name "Docker" && \
     forge install foundry-rs/forge-std
 COPY ./src ./src
-COPY package*.json .env foundry.toml ./
+COPY package*.json .env foundry.toml start.sh ./
 RUN mkdir test && \
     apk update && \
     apk add --update --no-cache nodejs npm procps && \
     npm ci --production && \
     npm install pm2 -g
-CMD [ "pm2 start 'pkill -f forta-agent; npm run start:prod' --cron-restart='0 0 * * *' && pm2 logs" ]
+CMD [ "pm2 start 'sh start.sh' --cron-restart='0 0 * * *' && pm2 logs" ]

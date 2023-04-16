@@ -1,0 +1,1 @@
+pkill -f forta-agent; npm run start:prod
