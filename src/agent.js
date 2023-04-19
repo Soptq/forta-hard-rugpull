@@ -26,6 +26,7 @@ const SNOWTRACE_API_KEY = process.env.SNOWTRACE_API_KEY;
 const taskQueue = [];
 let findingsCache = [];
 let consumerStarted = false;
+let exitConsumer = false;
 
 const getCreatedContractAddress = async (txEvent) => {
     if (!txEvent.to) {
@@ -64,12 +65,24 @@ const getSourceCode = async (txEvent, contractAddress) => {
     return data.result[0].SourceCode;
 }
 
-const runTaskConsumer = async () => {
+const runTaskConsumer = async (testingContext) => {
     console.log("Starting task consumer...")
+    if (consumerStarted) {
+        console.log("Task consumer already started.")
+        return;
+    }
     consumerStarted = true;
     while (true) {
+        if (exitConsumer) {
+            return;
+        }
+
         if (taskQueue.length === 0) {
-            await new Promise(r => setTimeout(r, 1000 * 10));
+            if (testingContext) {
+                await new Promise(r => setTimeout(r, 1000));
+            }else {
+                await new Promise(r => setTimeout(r, 1000 * 10));
+            }
             continue;
         }
 
@@ -159,14 +172,16 @@ const runTaskConsumer = async () => {
                         },
                         labels: [
                             Label.fromObject({
-                                entityType: EntityType.ADDRESS,
-                                label: "scam",
-                                confidence: 0.5,
+                                "entity": txEvent.transaction.from,
+                                "entityType": EntityType.Address,
+                                "label": "scam",
+                                "confidence": 0.5,
                             }),
                             Label.fromObject({
-                                entityType: EntityType.ADDRESS,
-                                label: "scam-contract",
-                                confidence: 0.5,
+                                "entity": createdContract,
+                                "entityType": EntityType.Address,
+                                "label": "scam-contract",
+                                "confidence": 0.5,
                             }),
                         ]
                     }));
@@ -188,14 +203,16 @@ const runTaskConsumer = async () => {
                     },
                     labels: [
                         Label.fromObject({
-                            entityType: EntityType.ADDRESS,
-                            label: "scam",
-                            confidence: 0.8,
+                            "entity": txEvent.transaction.from,
+                            "entityType": EntityType.Address,
+                            "label": "scam",
+                            "confidence": 0.8,
                         }),
                         Label.fromObject({
-                            entityType: EntityType.ADDRESS,
-                            label: "scam-contract",
-                            confidence: 0.8,
+                            "entity": createdContract,
+                            "entityType": EntityType.Address,
+                            "label": "scam-contract",
+                            "confidence": 0.8,
                         }),
                     ]
                 }));
@@ -206,11 +223,11 @@ const runTaskConsumer = async () => {
     }
 }
 
-const handleTransaction = async (txEvent) => {
+const provideHandleTransaction = async (txEvent, testingContext) => {
     let findings = [];
 
     if (!consumerStarted) {
-        runTaskConsumer();
+        runTaskConsumer(testingContext);
     }
 
     const createdContract = await getCreatedContractAddress(txEvent);
@@ -223,16 +240,28 @@ const handleTransaction = async (txEvent) => {
     taskQueue.push({txEvent, createdContract});
     console.log(`[${taskQueue.length}] Added task for ${txEvent.transaction.hash}...`)
 
+    if (testingContext) {
+        await new Promise(resolve => setTimeout(resolve, 1000 * 100));
+    }
+
     if (findingsCache.length > 0) {
         findings = findingsCache;
         findingsCache = [];
     }
 
+    if (testingContext) {
+        exitConsumer = true;
+    }
+
     return findings;
+}
+
+const handleTransaction = async (txEvent) => {
+    return await provideHandleTransaction(txEvent, false);
 };
 
 const initialize = async () => {
-    runTaskConsumer();
+    runTaskConsumer(false);
 }
 
 // const handleBlock = async (blockEvent) => {
@@ -248,6 +277,7 @@ const initialize = async () => {
 // };
 
 module.exports = {
+    provideHandleTransaction,
     initialize,
     handleTransaction,
     // handleBlock,
