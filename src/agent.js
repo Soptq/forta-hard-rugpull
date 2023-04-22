@@ -138,7 +138,7 @@ const runInvarianceTest = async (txEvent, createdContract) => {
             conterexample = testResult["counterexample"]
         }
 
-        if (reason.startsWith("EvmError")) continue;
+        if (!!reason && reason.startsWith("EvmError")) continue;
 
         if (!success) {
             rugpullTechniques.push(testName.slice(7, -4).toUpperCase());
