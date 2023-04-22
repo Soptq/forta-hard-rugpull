@@ -31,6 +31,16 @@ When one of the above mentioned rug pull is detected:
   - Metadata:
     - attacker_deployer_address: the address of the attacker's deployer contract
     - token_contract_address: the address of the token contract
+    - reason: the reason for the alert
+    - couterexample: give a example sequence of function calls that trigger the alert
+
+Here, {RUGPULL_CATEGORY} is the category of the rug pull. The following rug pull categories are supported:
+ - HONEYPOT
+ - HIDDENMINTS
+ - FAKEOWNERSHIPRENOUNCIATION
+ - HIDDENTRANSFERS
+ - HIDDENFEEMODIFIERS
+ - HIDDENTRANSFERREVERTS
 
 When two or more of the above mentioned rug pull is detected, the agent will additionally fire the following alert:
 
@@ -47,3 +57,13 @@ When two or more of the above mentioned rug pull is detected, the agent will add
 ```shell
 npm run tx 0xa6fa9abc4dcf094749997e57beb20b2287614bd9da34bcab1ffd912ccdd1775e
 ```
+
+## Reproduce to test a token contract locally
+
+1. get the transaction ID that deploys the token.
+2. at `handleTransaction()` function in `agent.js`, change `false` in `provideHandleTransaction()` call to `true`
+```js
+// return await provideHandleTransaction(txEvent, false);
+return await provideHandleTransaction(txEvent, true);
+```
+3run `npm run tx {TXID}`

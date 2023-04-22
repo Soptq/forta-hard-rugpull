@@ -180,7 +180,7 @@ contract DynamicFakeOwnershipRenounciationTest is Test {
     }
     
     function invariant_ownership() external {
-        assertTrue(target.owner() != msg.sender);
+        assertTrue(target.owner() == address(0x1));
     }
 }
 `
@@ -222,10 +222,10 @@ contract DynamicHiddenFeeModifiersTest is Test {
     function setUp() public {
         target = new ${entryContract.name}(${args.join(", ")});
         ${this.contractInfo.hasBalanceVariable ? 'deal(address(target), address(this), 1e20);' : ''}
-        ${this.contractInfo.isOwnableContract ? 'address testAddress = address(this);vm.startPrank(address(target.owner()));target.transfer(testAddress, target.balanceOf(target.owner()));target.transferOwnership(testAddress);vm.stopPrank();' : ''}
+        ${this.contractInfo.isOwnableContract ? 'address testAddress = address(this);vm.startPrank(address(target.owner()));try target.transfer(testAddress, target.balanceOf(target.owner())) returns (bool success) {if (!success) {willSkip = false;}} catch  {willSkip = false;}target.transferOwnership(testAddress);vm.stopPrank();' : ''}
         uint balanceInitial = target.balanceOf(address(this));
         if (balanceInitial > 0) {
-            willSkip = false;
+            willSkip = willSkip || false;
             target.transfer(address(0x1), 1e6);
             // get current Fee
             vm.startPrank(address(0x1));
@@ -267,10 +267,11 @@ contract DynamicHiddenTransferRevertsTest is Test {
     function setUp() public {
         target = new ${entryContract.name}(${args.join(", ")});
         ${this.contractInfo.hasBalanceVariable ? 'deal(address(target), address(this), 1e20);' : ''}
-        ${this.contractInfo.isOwnableContract ? 'address testAddress = address(this);vm.startPrank(address(target.owner()));target.transfer(testAddress, target.balanceOf(target.owner()));target.transferOwnership(testAddress);vm.stopPrank();' : ''}
+        ${this.contractInfo.isOwnableContract ? 'address testAddress = address(this);vm.startPrank(address(target.owner()));try target.transfer(testAddress, target.balanceOf(target.owner())) returns (bool success) {if (!success) {willSkip = false;}} catch  {willSkip = false;}target.transferOwnership(testAddress);vm.stopPrank();' : ''}
+        
         uint balanceInitial = target.balanceOf(address(this));
         if (balanceInitial > 0) {
-            willSkip = false;
+            willSkip = willSkip || false;
             target.transfer(address(0x1), 100000000);
         } else {
             willSkip = true;

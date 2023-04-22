@@ -65,6 +65,142 @@ const getSourceCode = async (txEvent, contractAddress) => {
     return data.result[0].SourceCode;
 }
 
+const runInvarianceTest = async (txEvent, createdContract) => {
+    let sourceCode = await getSourceCode(txEvent, createdContract);
+    if (!sourceCode) return;
+    console.log(`Found source code for ${createdContract}...`)
+
+    if (sourceCode.startsWith("{")) {
+        // remove files under working
+        if (fs.existsSync('./working')) {
+            fs.rmSync('./working', {recursive: true});
+        }
+
+        // multiple contracts in the same file
+        let responseType = 0;
+        if (sourceCode[1] === "{") responseType = 1;
+
+        let inner;
+        if (responseType === 0) {
+            inner = JSON.parse(sourceCode)
+        } else if (responseType === 1) {
+            inner = JSON.parse(sourceCode.slice(1, -1)).sources
+        }
+
+        for (const [contractName, contractSourceCode] of Object.entries(inner)) {
+            // write files locally
+            fs.mkdirSync(getDirName(`./working/${contractName}`), { recursive: true });
+            fs.writeFileSync(`./working/${contractName}`, contractSourceCode.content)
+        }
+
+        // forge flatten
+        let longestFlattenedContractLength = 0;
+        for (const contractName of Object.keys(inner)) {
+            const contractCode = await shell.exec(`forge flatten --root ./working ./working/${contractName}`, {silent: true}).toString();
+            if (contractCode.length > longestFlattenedContractLength) {
+                sourceCode = contractCode;
+                longestFlattenedContractLength = contractCode.length;
+            }
+        }
+    }
+
+    const deploymentData = txEvent.transaction.data;
+    const code = await getEthersProvider().getCode(createdContract);
+    const loc = deploymentData.lastIndexOf(code.slice(-32));
+    if (loc < 0) return;
+
+    const constructArguments = deploymentData.slice(loc + 32)
+
+    let localFindingsCount = 0;
+    let testing;
+
+    if (fs.existsSync('./out')) {
+        fs.rmSync('./out', {recursive: true});
+    }
+
+    const injectedSourceCode = DefaultInjector(sourceCode);
+    testing = new DynamicTest(injectedSourceCode, constructArguments);
+
+    const results = await testing.test(null);
+    const rugpullTechniques = [];
+
+    for (const [key, value] of Object.entries(results)) {
+        if (!key.startsWith("test/test.sol")) continue;
+        const testName = key.split(":")[1];
+        const result = value["test_results"];
+        let success = true
+        let reason = null;
+        let conterexample = null;
+        for (const [subTestName, testResult] of Object.entries(result)) {
+            if (subTestName === "setUp()") continue;
+            success = success && testResult["success"]
+            reason = testResult["reason"]
+            conterexample = testResult["counterexample"]
+        }
+
+        if (!success) {
+            rugpullTechniques.push(testName.slice(7, -4).toUpperCase());
+            findingsCache.push(Finding.fromObject({
+                name: `HARD-RUG-PULL-${testName.slice(7, -4).toUpperCase()}-DYNAMIC`,
+                alertId: `HARD-RUG-PULL-${testName.slice(7, -4).toUpperCase()}-DYNAMIC`,
+                description: `${txEvent.transaction.from} deployed a token contract ${createdContract} that may result in a hard rug pull`,
+                severity: FindingSeverity.Medium,
+                type: FindingType.Suspicious,
+                metadata: {
+                    "attacker_deployer_address": txEvent.transaction.from,
+                    "token_contract_address": createdContract,
+                    "reason": !!reason ? reason : "Assertion failed",
+                    "counterexample": !!conterexample ? JSON.stringify(conterexample) : "{Sequence:[]}",
+                },
+                labels: [
+                    Label.fromObject({
+                        "entity": txEvent.transaction.from,
+                        "entityType": EntityType.Address,
+                        "label": "scam",
+                        "confidence": 0.5,
+                    }),
+                    Label.fromObject({
+                        "entity": createdContract,
+                        "entityType": EntityType.Address,
+                        "label": "scam-contract",
+                        "confidence": 0.5,
+                    }),
+                ]
+            }));
+            localFindingsCount += 1;
+        }
+    }
+
+    if (localFindingsCount > 1)  {
+        findingsCache.push(Finding.fromObject({
+            name: `HARD-RUG-PULL-1`,
+            alertId: `HARD-RUG-PULL-1`,
+            description: `${txEvent.transaction.from} deployed a token contract ${createdContract} that may result in a hard rug pull`,
+            severity: FindingSeverity.High,
+            type: FindingType.Suspicious,
+            metadata: {
+                "attacker_deployer_address": txEvent.transaction.from,
+                "token_contract_address": createdContract,
+                "rugpull_techniques": rugpullTechniques.join(", ")
+            },
+            labels: [
+                Label.fromObject({
+                    "entity": txEvent.transaction.from,
+                    "entityType": EntityType.Address,
+                    "label": "scam",
+                    "confidence": 0.8,
+                }),
+                Label.fromObject({
+                    "entity": createdContract,
+                    "entityType": EntityType.Address,
+                    "label": "scam-contract",
+                    "confidence": 0.8,
+                }),
+            ]
+        }));
+    }
+}
+
 const runTaskConsumer = async (testingContext) => {
     console.log("Starting task consumer...")
     if (consumerStarted) {
@@ -90,133 +226,8 @@ const runTaskConsumer = async (testingContext) => {
             const { txEvent, createdContract } = taskQueue.shift();
             console.log(`Running task for ${txEvent.transaction.hash}...`)
 
-            let sourceCode = await getSourceCode(txEvent, createdContract);
-            if (!sourceCode) continue;
-            console.log(`Found source code for ${createdContract}...`)
+            await runInvarianceTest(txEvent, createdContract);
 
-            if (sourceCode.startsWith("{")) {
-                // remove files under working
-                if (fs.existsSync('./working')) {
-                    fs.rmSync('./working', {recursive: true});
-                }
-
-                // multiple contracts in the same file
-                let responseType = 0;
-                if (sourceCode[1] === "{") responseType = 1;
-
-                let inner;
-                if (responseType === 0) {
-                    inner = JSON.parse(sourceCode)
-                } else if (responseType === 1) {
-                    inner = JSON.parse(sourceCode.slice(1, -1)).sources
-                }
-
-                for (const [contractName, contractSourceCode] of Object.entries(inner)) {
-                    // write files locally
-                    fs.mkdirSync(getDirName(`./working/${contractName}`), { recursive: true });
-                    fs.writeFileSync(`./working/${contractName}`, contractSourceCode.content)
-                }
-
-                // forge flatten
-                let longestFlattenedContractLength = 0;
-                for (const contractName of Object.keys(inner)) {
-                    const contractCode = await shell.exec(`forge flatten --root ./working ./working/${contractName}`, {silent: true}).toString();
-                    if (contractCode.length > longestFlattenedContractLength) {
-                        sourceCode = contractCode;
-                        longestFlattenedContractLength = contractCode.length;
-                    }
-                }
-            }
-
-            const deploymentData = txEvent.transaction.data;
-            const code = await getEthersProvider().getCode(createdContract);
-            const loc = deploymentData.lastIndexOf(code.slice(-32));
-            if (loc < 0) continue;
-
-            const constructArguments = deploymentData.slice(loc + 32)
-
-            let localFindingsCount = 0;
-            let testing;
-
-            if (fs.existsSync('./out')) {
-                fs.rmSync('./out', {recursive: true});
-            }
-
-            const injectedSourceCode = DefaultInjector(sourceCode);
-            testing = new DynamicTest(injectedSourceCode, constructArguments);
-
-            const results = await testing.test(txEvent);
-            const rugpullTechniques = [];
-
-            for (const [key, value] of Object.entries(results)) {
-                if (!key.startsWith("test/test.sol")) continue;
-                const testName = key.split(":")[1];
-                const result = value["test_results"];
-                let success = true
-                for (const [subTestName, testResult] of Object.entries(result)) {
-                    if (subTestName === "setUp()") continue;
-                    success = success && testResult["success"]
-                }
-
-                if (!success) {
-                    rugpullTechniques.push(testName.slice(7, -4).toUpperCase());
-                    findingsCache.push(Finding.fromObject({
-                        name: `HARD-RUG-PULL-${testName.slice(7, -4).toUpperCase()}-DYNAMIC`,
-                        alertId: `HARD-RUG-PULL-${testName.slice(7, -4).toUpperCase()}-DYNAMIC`,
-                        description: `${txEvent.transaction.from} deployed a token contract ${createdContract} that may result in a hard rug pull`,
-                        severity: FindingSeverity.Medium,
-                        type: FindingType.Suspicious,
-                        metadata: {
-                            "attacker_deployer_address": txEvent.transaction.from,
-                            "token_contract_address": createdContract,
-                        },
-                        labels: [
-                            Label.fromObject({
-                                "entity": txEvent.transaction.from,
-                                "entityType": EntityType.Address,
-                                "label": "scam",
-                                "confidence": 0.5,
-                            }),
-                            Label.fromObject({
-                                "entity": createdContract,
-                                "entityType": EntityType.Address,
-                                "label": "scam-contract",
-                                "confidence": 0.5,
-                            }),
-                        ]
-                    }));
-                    localFindingsCount += 1;
-                }
-            }
-
-            if (localFindingsCount > 1)  {
-                findingsCache.push(Finding.fromObject({
-                    name: `HARD-RUG-PULL-1`,
-                    alertId: `HARD-RUG-PULL-1`,
-                    description: `${txEvent.transaction.from} deployed a token contract ${createdContract} that may result in a hard rug pull`,
-                    severity: FindingSeverity.High,
-                    type: FindingType.Suspicious,
-                    metadata: {
-                        "attacker_deployer_address": txEvent.transaction.from,
-                        "token_contract_address": createdContract,
-                        "rugpull_techniques": rugpullTechniques.join(", ")
-                    },
-                    labels: [
-                        Label.fromObject({
-                            "entity": txEvent.transaction.from,
-                            "entityType": EntityType.Address,
-                            "label": "scam",
-                            "confidence": 0.8,
-                        }),
-                        Label.fromObject({
-                            "entity": createdContract,
-                            "entityType": EntityType.Address,
-                            "label": "scam-contract",
-                            "confidence": 0.8,
-                        }),
-                    ]
-                }));
-            }
         } catch (e) {
             console.log(e)
         }
