@@ -121,7 +121,7 @@ const runInvarianceTest = async (txEvent, createdContract) => {
     const injectedSourceCode = DefaultInjector(sourceCode);
     testing = new DynamicTest(injectedSourceCode, constructArguments);
 
-    const results = await testing.test(null);
+    const results = await testing.test(txEvent);
     const rugpullTechniques = [];
 
     for (const [key, value] of Object.entries(results)) {
