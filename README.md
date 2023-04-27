@@ -52,6 +52,15 @@ When two or more of the above mentioned rug pull is detected, the agent will add
     - attacker_deployer_address: the address of the attacker's deployer contract
     - token_contract_address: the address of the token contract
 
+### How to read the counterexample and the reason
+
+A example below:
+```shell
+{"attacker_deployer_address":"0xfb941dd93dac213ecb38d6728901ce20234acac5","counterexample":"{\"Sequence\":[{\"sender\":\"0x7fa9385be102ac3eac297483dd6233d62b3e1496\",\"addr\":\"0x5615deb798bb3e4dfa0139dfa1b3d433cc23b72f\",\"calldata\":\"0xec28438a0000000000000000000000000000000000000000000000000000000000000001\",\"signature\":\"setMaxTxAmount(uint256)\",\"contract_name\":\"test/test.sol:NETWORK\",\"traces\":{\"arena\":[{\"parent\":null,\"children\":[],\"idx\":0,\"trace\":{\"depth\":0,\"success\":true,\"contract\":null,\"label\":null,\"caller\":\"0x7fa9385be102ac3eac297483dd6233d62b3e1496\",\"address\":\"0x5615deb798bb3e4dfa0139dfa1b3d433cc23b72f\",\"kind\":\"CALL\",\"value\":\"0x0\",\"data\":{\"Raw\":\"0xec28438a0000000000000000000000000000000000000000000000000000000000000001\"},\"output\":{\"Raw\":\"0x\"},\"gas_cost\":7457,\"status\":\"Stop\",\"call_context\":null,\"steps\":[]},\"ordering\":[]}]}}]}","reason":"Transfer amount exceeds the maxTxAmount.","token_contract_address":"0x1e9804d7a48F661871eFcdE4669b39263f47F3e4"}
+```
+
+The sequence is a ordered list of transactions that triggers the rugpull. So, if you deploy a new contract, and execute transactions as the sequence suggests, you will end up triggering the hard-rugpull (for this example you provide, it is the HiddenTransferReverts rug pull. Next. the reason field gives exact reason of why the rugpull took placed (in this case, it is because the transfer is reverted due to the error Transfer amount exceeds the maxTxAmount, where `maxTxAmount  is set by setMaxTxAmount function.) In other words, if the deployer calls the setMaxTxAmount function with 0, the transfer of the token is actually disabled, because no transfer can be made, which causes a hard-rugpull.
+
 ## Test
 
 ```shell
