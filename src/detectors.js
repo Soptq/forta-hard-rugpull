@@ -180,7 +180,7 @@ contract DynamicFakeOwnershipRenounciationTest is Test {
     }
     
     function invariant_ownership() external {
-        assertTrue(target.owner() == address(0x1));
+        assertTrue(target.owner() == address(0x1) && target.owner() != address(0x0));
     }
 }
 `

@@ -1,6 +1,6 @@
 {
   "name": "forta-hard-rugpull",
-  "version": "0.3.5",
+  "version": "0.3.6",
   "description": "A forta agent that detects hard rugpulls",
   "repository": "https://github.com/Soptq/forta-hard-rugpull",
   "chainIds": [
